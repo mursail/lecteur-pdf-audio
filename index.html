@@ -6,7 +6,6 @@
 <meta name="theme-color" content="#b85c2c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Lecteur PDF Audio</title>
 <link rel="manifest" href="./manifest.json">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -22,6 +21,7 @@
   --muted: #8c7e6a;
   --border: #d4ccbc;
   --highlight: rgba(247,216,80,0.55);
+  --highlight-active: rgba(184,92,44,0.25);
   --shadow: 0 4px 20px rgba(44,36,22,0.10);
 }
 
@@ -79,10 +79,10 @@ body {
 .menu-item .icon { font-size: 1.2rem; }
 
 /* SCREENS */
-#home-screen, #history-screen, #reader-screen {
+#home-screen, #history-screen, #favorites-screen, #reader-screen {
   flex: 1; overflow: hidden; display: none; flex-direction: column;
 }
-#home-screen.active, #history-screen.active, #reader-screen.active { display: flex; }
+#home-screen.active, #history-screen.active, #favorites-screen.active, #reader-screen.active { display: flex; }
 
 /* HOME */
 #home-screen { align-items: center; justify-content: center; padding: 24px; }
@@ -98,27 +98,27 @@ body {
 .upload-box h2 { font-family: 'Bitter', serif; font-size: 1.1rem; color: var(--accent); margin-bottom: 8px; }
 .upload-box p { font-size: 0.82rem; color: var(--muted); line-height: 1.5; }
 
-/* HISTORY */
-#history-screen { padding: 0; }
-.history-title {
+/* HISTORY & FAVORITES */
+#history-screen, #favorites-screen { padding: 0; }
+.list-title {
   padding: 14px 16px; font-family: 'Bitter', serif;
   font-size: 1rem; color: var(--accent);
   border-bottom: 1px solid var(--border);
   background: var(--paper); flex-shrink: 0;
 }
-.history-list { flex: 1; overflow-y: auto; padding: 12px; }
-.history-empty { text-align: center; color: var(--muted); font-size: 0.88rem; margin-top: 40px; }
-.history-item {
+.list-body { flex: 1; overflow-y: auto; padding: 12px; }
+.list-empty { text-align: center; color: var(--muted); font-size: 0.88rem; margin-top: 40px; }
+.list-item {
   background: var(--paper); border: 1px solid var(--border);
   border-radius: 12px; padding: 14px 16px; margin-bottom: 10px;
   cursor: pointer; display: flex; align-items: center; gap: 12px;
 }
-.history-item:active { box-shadow: var(--shadow); }
-.hi-icon { font-size: 1.5rem; flex-shrink: 0; }
-.hi-info { flex: 1; min-width: 0; }
-.hi-name { font-weight: 600; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hi-page { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
-.hi-del { font-size: 1.1rem; color: var(--muted); padding: 4px; flex-shrink: 0; }
+.list-item:active { box-shadow: var(--shadow); }
+.li-icon { font-size: 1.5rem; flex-shrink: 0; }
+.li-info { flex: 1; min-width: 0; }
+.li-name { font-weight: 600; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.li-page { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
+.li-del { font-size: 1.1rem; color: var(--muted); padding: 4px; flex-shrink: 0; }
 
 /* READER */
 #pdf-viewer {
@@ -135,17 +135,35 @@ body {
   background: var(--surface); border-bottom: 1px solid var(--border);
   padding: 5px 12px; font-size: 0.7rem; color: var(--muted);
   font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  display: flex; align-items: center; justify-content: space-between;
 }
+.page-fav-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 1rem; color: var(--muted); padding: 0 4px;
+}
+.page-fav-btn.active { color: #e8a020; }
 .page-wrap canvas { display: block; width: 100%; height: auto; }
 .text-layer {
   position: absolute; left: 0; right: 0; bottom: 0;
-  pointer-events: none; overflow: hidden;
+  pointer-events: all; overflow: hidden;
 }
 .text-layer span {
   position: absolute; white-space: pre; color: transparent;
   transform-origin: 0 0; border-radius: 2px; transition: background 0.15s;
+  cursor: pointer;
 }
 .text-layer span.hl { background: var(--highlight); }
+.text-layer span.hl-tap { background: var(--highlight-active); }
+
+/* Double tap hint */
+.tap-hint {
+  position: fixed; bottom: 170px; left: 50%; transform: translateX(-50%);
+  background: rgba(44,36,22,0.8); color: #fff;
+  border-radius: 20px; padding: 8px 16px;
+  font-size: 0.78rem; z-index: 60;
+  opacity: 0; transition: opacity 0.3s; pointer-events: none;
+}
+.tap-hint.visible { opacity: 1; }
 
 /* BOTTOM BAR */
 .bottom-bar {
@@ -267,12 +285,14 @@ input[type="range"] { flex: 1; height: 3px; accent-color: var(--accent); cursor:
 <body>
 
 <div id="loading"><div class="spinner"></div><p id="load-txt">Chargement...</p></div>
+<div class="tap-hint" id="tap-hint">👆 Double appui pour lire depuis ici</div>
 
 <div class="menu-overlay" id="menu-overlay"></div>
 <div class="side-menu" id="side-menu">
   <div class="side-menu-header">📖 Lecteur PDF Audio</div>
   <div class="menu-item" id="menu-home"><span class="icon">🏠</span> Accueil</div>
   <div class="menu-item" id="menu-history"><span class="icon">📋</span> Historique</div>
+  <div class="menu-item" id="menu-favorites"><span class="icon">⭐</span> Favoris</div>
 </div>
 
 <div class="modal-overlay" id="modal-overlay">
@@ -281,7 +301,7 @@ input[type="range"] { flex: 1; height: 3px; accent-color: var(--accent); cursor:
     <div class="modal-file-name" id="modal-fname"></div>
     <div class="modal-page" id="modal-page"></div>
     <p>Resélectionne ce fichier PDF pour reprendre là où tu t'es arrêté.</p>
-    <button class="btn-select" id="btn-reselect">
+    <button class="btn-select">
       <input type="file" id="reselect-input" accept=".pdf">
       📂 Choisir le fichier
     </button>
@@ -305,8 +325,13 @@ input[type="range"] { flex: 1; height: 3px; accent-color: var(--accent); cursor:
 </div>
 
 <div id="history-screen">
-  <div class="history-title">📋 Historique de lecture</div>
-  <div class="history-list" id="history-list"></div>
+  <div class="list-title">📋 Historique de lecture</div>
+  <div class="list-body" id="history-list"></div>
+</div>
+
+<div id="favorites-screen">
+  <div class="list-title">⭐ Pages favorites</div>
+  <div class="list-body" id="favorites-list"></div>
 </div>
 
 <div id="reader-screen">
@@ -343,7 +368,6 @@ input[type="range"] { flex: 1; height: 3px; accent-color: var(--accent); cursor:
 </div>
 
 <script>
-// ── SERVICE WORKER ──
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
@@ -351,32 +375,66 @@ if ('serviceWorker' in navigator) {
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
+// ── STORAGE KEYS ──
+const HISTORY_KEY   = 'pdfReader_history_v2';
+const FAVORITES_KEY = 'pdfReader_favorites_v1';
+const CACHE_KEY     = 'pdfReader_pageCache_v1';
+const RESUME_KEY    = 'pdfReader_resume_v1';
+
 // ── HISTORY ──
-const HISTORY_KEY = 'pdfReader_history_v1';
 function getHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; } }
-function saveHistory(arr) { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(arr)); } catch {} }
-function updateHistoryEntry(name, page) {
-  const arr = getHistory();
-  const idx = arr.findIndex(h => h.name === name);
-  if (idx >= 0) arr[idx].page = page;
-  else { arr.unshift({ name, page }); if (arr.length > 30) arr.splice(30); }
-  saveHistory(arr);
+function saveHistory(a) { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(a)); } catch {} }
+function updateHistory(name, page, sentIdx) {
+  const a = getHistory();
+  const i = a.findIndex(h => h.name === name);
+  if (i >= 0) { a[i].page = page; a[i].sentIdx = sentIdx; }
+  else { a.unshift({ name, page, sentIdx: sentIdx || 0 }); if (a.length > 30) a.splice(30); }
+  saveHistory(a);
 }
-function deleteHistoryEntry(name) { saveHistory(getHistory().filter(h => h.name !== name)); }
+function deleteHistory(name) { saveHistory(getHistory().filter(h => h.name !== name)); }
+
+// ── FAVORITES ──
+function getFavorites() { try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'); } catch { return []; } }
+function saveFavorites(a) { try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(a)); } catch {} }
+function toggleFavorite(name, page) {
+  const a = getFavorites();
+  const i = a.findIndex(f => f.name === name && f.page === page);
+  if (i >= 0) a.splice(i, 1);
+  else a.unshift({ name, page, date: new Date().toLocaleDateString('fr-FR') });
+  saveFavorites(a);
+  return i < 0; // true = added
+}
+function isFavorite(name, page) {
+  return getFavorites().some(f => f.name === name && f.page === page);
+}
+
+// ── PAGE TEXT CACHE (offline support) ──
+function getPageCache(name) {
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY + '_' + name) || 'null'); } catch { return null; }
+}
+function savePageCache(name, pageTextsData) {
+  try { localStorage.setItem(CACHE_KEY + '_' + name, JSON.stringify(pageTextsData)); } catch(e) {
+    console.log('Cache full:', e);
+  }
+}
 
 // ── STATE ──
 let pdfDoc = null, totalPages = 0, currentPage = 1;
 let currentFileName = '';
 let pageTexts = {}, renderedPages = {}, pageSentences = {};
+let pageTextCache = {}; // text-only cache for offline
 let voices = [];
 let isSpeaking = false, isPaused = false;
 let currentSentIdx = 0, allReadingSentences = [];
 let hlSpans = [], preloadedUpTo = 0, lastPageRead = 1;
 let pendingHistoryItem = null;
 
+// Double tap state
+let lastTapSpan = null, lastTapTime = 0;
+
 // ── SCREENS ──
 function showScreen(id) {
-  ['home-screen','history-screen','reader-screen'].forEach(s =>
+  ['home-screen','history-screen','favorites-screen','reader-screen'].forEach(s =>
     document.getElementById(s).classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
@@ -400,23 +458,55 @@ menuOverlay.addEventListener('click', closeMenu);
 sideMenu.addEventListener('touchstart', () => {
   clearTimeout(menuTimer); menuTimer = setTimeout(closeMenu, 4000);
 }, { passive: true });
+
 document.getElementById('menu-home').addEventListener('click', () => { closeMenu(); showScreen('home-screen'); });
 document.getElementById('menu-history').addEventListener('click', () => { closeMenu(); renderHistoryScreen(); showScreen('history-screen'); });
+document.getElementById('menu-favorites').addEventListener('click', () => { closeMenu(); renderFavoritesScreen(); showScreen('favorites-screen'); });
 
 // ── HISTORY SCREEN ──
 function renderHistoryScreen() {
   const list = document.getElementById('history-list');
   const arr = getHistory();
-  if (!arr.length) { list.innerHTML = '<div class="history-empty">Aucun fichier dans l\'historique</div>'; return; }
+  if (!arr.length) { list.innerHTML = '<div class="list-empty">Aucun fichier dans l\'historique</div>'; return; }
   list.innerHTML = '';
   arr.forEach(item => {
     const div = document.createElement('div');
-    div.className = 'history-item';
-    div.innerHTML = `<div class="hi-icon">📄</div><div class="hi-info"><div class="hi-name">${item.name}</div><div class="hi-page">Page ${item.page}</div></div><div class="hi-del">🗑️</div>`;
-    div.querySelector('.hi-del').addEventListener('click', e => { e.stopPropagation(); deleteHistoryEntry(item.name); renderHistoryScreen(); });
+    div.className = 'list-item';
+    div.innerHTML = `<div class="li-icon">📄</div><div class="li-info"><div class="li-name">${item.name}</div><div class="li-page">Page ${item.page}${item.sentIdx ? ' · phrase ' + item.sentIdx : ''}</div></div><div class="li-del">🗑️</div>`;
+    div.querySelector('.li-del').addEventListener('click', e => { e.stopPropagation(); deleteHistory(item.name); renderHistoryScreen(); });
     div.addEventListener('click', () => openReselectModal(item));
     list.appendChild(div);
   });
+}
+
+// ── FAVORITES SCREEN ──
+function renderFavoritesScreen() {
+  const list = document.getElementById('favorites-list');
+  const arr = getFavorites();
+  if (!arr.length) { list.innerHTML = '<div class="list-empty">Aucune page favorite</div>'; return; }
+  list.innerHTML = '';
+  arr.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML = `<div class="li-icon">⭐</div><div class="li-info"><div class="li-name">${item.name}</div><div class="li-page">Page ${item.page} · ${item.date}</div></div><div class="li-del">🗑️</div>`;
+    div.querySelector('.li-del').addEventListener('click', e => {
+      e.stopPropagation();
+      const favs = getFavorites().filter(f => !(f.name === item.name && f.page === item.page));
+      saveFavorites(favs);
+      renderFavoritesScreen();
+      updateFavBtn(item.page);
+    });
+    div.addEventListener('click', () => {
+      const hist = getHistory().find(h => h.name === item.name);
+      if (hist) openReselectModal({ name: item.name, page: item.page, sentIdx: 0 });
+    });
+    list.appendChild(div);
+  });
+}
+
+function updateFavBtn(page) {
+  const btn = document.querySelector(`#pw-${page} .page-fav-btn`);
+  if (btn) btn.classList.toggle('active', isFavorite(currentFileName, page));
 }
 
 // ── RESELECT MODAL ──
@@ -436,7 +526,7 @@ document.getElementById('reselect-input').addEventListener('change', async e => 
   currentFileName = pendingHistoryItem.name;
   document.getElementById('hdr-name').textContent = currentFileName;
   const buf = await file.arrayBuffer();
-  await initPDF(buf, currentFileName, pendingHistoryItem.page);
+  await initPDF(buf, currentFileName, pendingHistoryItem.page, pendingHistoryItem.sentIdx || 0);
   pendingHistoryItem = null; e.target.value = '';
 });
 
@@ -456,6 +546,15 @@ function hideBar() { bottomBar.classList.add('hidden'); peekTab.classList.add('v
 document.addEventListener('touchstart', showBar, { passive: true });
 document.getElementById('pdf-viewer').addEventListener('scroll', showBar, { passive: true });
 peekTab.addEventListener('click', showBar);
+
+// ── TAP HINT ──
+const tapHint = document.getElementById('tap-hint');
+let tapHintTimer = null;
+function showTapHint() {
+  tapHint.classList.add('visible');
+  clearTimeout(tapHintTimer);
+  tapHintTimer = setTimeout(() => tapHint.classList.remove('visible'), 2000);
+}
 
 // ── VOICES ──
 function loadVoices() {
@@ -490,17 +589,21 @@ async function loadNewFile(file) {
   const buf = await file.arrayBuffer();
   const arr = getHistory();
   const saved = arr.find(h => h.name === file.name);
-  await initPDF(buf, file.name, saved ? saved.page : 1);
+  await initPDF(buf, file.name, saved ? saved.page : 1, saved ? (saved.sentIdx || 0) : 0);
 }
 
 // ── INIT PDF ──
-async function initPDF(buf, name, startPage) {
+async function initPDF(buf, name, startPage, startSentIdx) {
   pdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
   totalPages = pdfDoc.numPages;
   currentPage = Math.min(startPage, totalPages);
   pageTexts = {}; renderedPages = {}; pageSentences = {};
   preloadedUpTo = 0; lastPageRead = currentPage;
   isSpeaking = false; isPaused = false; allReadingSentences = [];
+  currentSentIdx = startSentIdx || 0;
+
+  // Load page text cache
+  pageTextCache = getPageCache(name) || {};
 
   document.getElementById('page-jump').max = totalPages;
   document.getElementById('page-jump').value = currentPage;
@@ -512,7 +615,7 @@ async function initPDF(buf, name, startPage) {
   document.getElementById('btn-pause').disabled = true;
   document.getElementById('btn-stop').disabled = true;
   document.getElementById('prog-fill').style.width = '0%';
-  document.getElementById('status-text').textContent = 'Prêt';
+  document.getElementById('status-text').textContent = startSentIdx ? 'Reprendre depuis la phrase ' + startSentIdx : 'Prêt';
   document.getElementById('pdf-viewer').innerHTML = '';
 
   showScreen('reader-screen');
@@ -521,11 +624,10 @@ async function initPDF(buf, name, startPage) {
   await renderPage(currentPage);
   if (currentPage > 1) document.getElementById('pw-' + currentPage)?.scrollIntoView({ block: 'start' });
 
-  // Preload next 10 pages + full PDF in background
   preloadPages(currentPage + 1, 10);
   preloadFullPDF(currentPage + 11);
   showBar();
-  updateHistoryEntry(name, currentPage);
+  updateHistory(name, currentPage, currentSentIdx);
 }
 
 // ── RENDER PAGE ──
@@ -542,8 +644,14 @@ async function renderPage(num) {
 
   const wrap = document.createElement('div');
   wrap.className = 'page-wrap'; wrap.id = 'pw-' + num;
+
   const lbl = document.createElement('div');
-  lbl.className = 'page-label'; lbl.textContent = 'Page ' + num;
+  lbl.className = 'page-label';
+  lbl.innerHTML = `<span>Page ${num}</span><button class="page-fav-btn ${isFavorite(currentFileName, num) ? 'active' : ''}" data-page="${num}">★</button>`;
+  lbl.querySelector('.page-fav-btn').addEventListener('click', () => {
+    const added = toggleFavorite(currentFileName, num);
+    lbl.querySelector('.page-fav-btn').classList.toggle('active', added);
+  });
   wrap.appendChild(lbl);
 
   const canvas = document.createElement('canvas');
@@ -573,6 +681,10 @@ async function renderPage(num) {
     const fs = Math.sqrt(item.transform[2]**2 + item.transform[3]**2) * baseScale;
     span.style.left = tx + 'px'; span.style.top = (ty - fs) + 'px';
     span.style.fontSize = fs + 'px'; span.style.lineHeight = '1';
+
+    // Double tap to start reading from here
+    span.addEventListener('click', () => handleSpanTap(span, num));
+
     tlDiv.appendChild(span);
     pageTexts[num].push({ str: item.str, span });
   });
@@ -580,6 +692,58 @@ async function renderPage(num) {
   renderedPages[num] = true;
   requestAnimationFrame(() => { tlDiv.style.top = lbl.offsetHeight + 'px'; });
   buildPageSentences(num);
+
+  // Cache text for offline
+  if (!pageTextCache[num]) {
+    pageTextCache[num] = items.map(it => it.str);
+    savePageCache(currentFileName, pageTextCache);
+  }
+}
+
+// ── DOUBLE TAP TO READ ──
+function handleSpanTap(span, pageNum) {
+  const now = Date.now();
+  const isDoubleTap = (lastTapSpan === span && now - lastTapTime < 400);
+
+  if (!isDoubleTap) {
+    // First tap — show hint and highlight briefly
+    lastTapSpan = span;
+    lastTapTime = now;
+    span.classList.add('hl-tap');
+    showTapHint();
+    setTimeout(() => span.classList.remove('hl-tap'), 400);
+    return;
+  }
+
+  // Double tap — start reading from this span
+  lastTapSpan = null;
+  span.classList.remove('hl-tap');
+
+  // Find which sentence this span belongs to
+  buildPageSentences(pageNum);
+  const sents = pageSentences[pageNum] || [];
+  let targetIdx = 0;
+  for (let i = 0; i < sents.length; i++) {
+    if (sents[i].spans && sents[i].spans.includes(span)) {
+      targetIdx = i; break;
+    }
+  }
+
+  // Build reading queue from this page and sentence
+  speechSynthesis.cancel();
+  isSpeaking = true; isPaused = false;
+  lastPageRead = pageNum;
+  allReadingSentences = [...sents.slice(targetIdx)];
+  currentSentIdx = 0;
+
+  document.getElementById('btn-play').disabled = true;
+  document.getElementById('btn-pause').disabled = false;
+  document.getElementById('btn-stop').disabled = false;
+  document.getElementById('status-text').textContent = 'Lecture depuis sélection...';
+  showBar();
+
+  preloadPages(pageNum + 1, 10);
+  setTimeout(() => speakIdx(0), 150);
 }
 
 // ── SMART PRELOAD ──
@@ -591,15 +755,16 @@ async function preloadPages(from, count) {
   }
 }
 
-// Preload full PDF in background silently
 async function preloadFullPDF(from) {
   for (let p = from; p <= totalPages; p++) {
     if (!renderedPages[p]) {
       await renderPage(p);
-      await new Promise(r => setTimeout(r, 50)); // small delay to not block UI
+      await new Promise(r => setTimeout(r, 80));
     }
     if (p > preloadedUpTo) preloadedUpTo = p;
   }
+  document.getElementById('status-text').textContent === 'Prêt' &&
+    (document.getElementById('status-text').textContent = 'Prêt ✅ (hors ligne disponible)');
 }
 
 function triggerNextPreload() {
@@ -639,7 +804,7 @@ async function goToPage(n) {
   if (!renderedPages[n]) { showLoad('Page ' + n + '...'); await renderPage(n); hideLoad(); }
   document.getElementById('pw-' + n)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   preloadPages(n + 1, 10);
-  showBar(); updateHistoryEntry(currentFileName, n);
+  showBar(); updateHistory(currentFileName, n, currentSentIdx);
 }
 document.getElementById('btn-prev').addEventListener('click', () => goToPage(currentPage - 1));
 document.getElementById('btn-next').addEventListener('click', () => goToPage(currentPage + 1));
@@ -682,13 +847,16 @@ async function speakIdx(idx) {
     }
     return;
   }
+
   currentSentIdx = idx;
   const sent = allReadingSentences[idx];
+
   if (sent.page !== currentPage) {
     currentPage = sent.page; document.getElementById('page-jump').value = currentPage;
-    updateHistoryEntry(currentFileName, currentPage);
     triggerNextPreload(); lastPageRead = currentPage;
   }
+
+  updateHistory(currentFileName, currentPage, idx);
   highlightSent(sent);
   document.getElementById('status-text').textContent = `Page ${sent.page}`;
 
@@ -722,6 +890,14 @@ document.getElementById('btn-play').addEventListener('click', async () => {
 
   const sents = await getPageSentences(fromPage);
   allReadingSentences = [...sents]; lastPageRead = fromPage;
+
+  // If resuming from saved sentence index
+  const hist = getHistory().find(h => h.name === currentFileName);
+  let startIdx = 0;
+  if (hist && hist.page === fromPage && hist.sentIdx > 0 && hist.sentIdx < allReadingSentences.length) {
+    startIdx = hist.sentIdx;
+  }
+
   preloadPages(fromPage + 1, 10);
 
   if (!allReadingSentences.length) {
@@ -732,7 +908,7 @@ document.getElementById('btn-play').addEventListener('click', async () => {
     document.getElementById('btn-stop').disabled = true;
     return;
   }
-  speakIdx(0);
+  speakIdx(startIdx);
 });
 
 // ── PAUSE ──
@@ -743,6 +919,7 @@ document.getElementById('btn-pause').addEventListener('click', () => {
     document.getElementById('btn-play').disabled = false; document.getElementById('btn-play').textContent = '▶';
     document.getElementById('btn-pause').disabled = true;
     document.getElementById('status-text').textContent = '⏸ En pause';
+    updateHistory(currentFileName, currentPage, currentSentIdx);
   }
 });
 
@@ -754,7 +931,7 @@ document.getElementById('btn-stop').addEventListener('click', () => {
   document.getElementById('btn-pause').disabled = true; document.getElementById('btn-stop').disabled = true;
   document.getElementById('prog-fill').style.width = '0%';
   document.getElementById('status-text').textContent = 'Arrêté';
-  clearHL();
+  clearHL(); updateHistory(currentFileName, currentPage, currentSentIdx);
 });
 
 // ── VOICE CHANGE ──
